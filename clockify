@@ -1,0 +1,63 @@
+#!/bin/bash
+
+CURRENTDATE=`date -d "-5 hours -45 minutes" "+%Y-%m-%dT%TZ"`
+CYAN='\033[1;36m'
+BLUE='\033[1;34m'
+NC='\033[0m'
+
+#Start standup time
+if [ "$1" = "start" ] && [ "$2" = "standup" ]
+then
+	echo -e "${CYAN}-----Starting standup-----${NC}"
+	echo -e "${BLUE}"
+	curl -H "content-type: application/json" -H "X-Api-Key: $APIKEY" -d "{\"start\":\"$CURRENTDATE\", \"billable\":\"true\", \"description\":\"meeting/Standup\", \"projectId\":\"$PROJECTID\"}" -X POST https://api.clockify.me/api/v1/workspaces/$WORKSPACEID/time-entries | json_pp
+
+	echo -e "${CYAN}-----Started standup-----"
+fi
+
+#Start new task
+if [ "$1" = "start" ] && [ "$2" = "new" ] && [ "$3" != "" ]
+then
+	echo -e "${CYAN}-----Creating Task-----${NC}"
+	echo -e "${BLUE}"
+	task=$(curl -H "content-type: application/json" -H "X-Api-Key: $APIKEY" -d "{\"name\":\"$3\", \"assigneeIds\":[\"$USERID\"]}" -X POST https://api.clockify.me/api/v1/workspaces/$WORKSPACEID/projects/$PROJECTID/tasks)
+	echo $task | json_pp
+
+	taskId=$(echo $task | jq -r .id)
+	echo $taskId
+	echo -e "${CYAN}-----Created Task-----"
+
+	echo -e "${CYAN}-----Starting Task-----${NC}"
+	echo -e "${BLUE}"
+
+	curl -H "content-type: application/json" -H "X-Api-Key: $APIKEY" -d "{\"start\":\"$CURRENTDATE\", \"billable\":\"true\", \"description\":\"$3\", \"projectId\":\"$PROJECTID\", \"taskId\":\"$taskId\"}" -X POST https://api.clockify.me/api/v1/workspaces/$WORKSPACEID/time-entries | json_pp
+
+	echo -e "${CYAN}-----Started Task-----"
+fi
+
+#Stop task
+if [ "$1" = "stop" ]
+then
+	echo -e "${CYAN}-----Stopping Task-----${NC}"
+	echo -e "${BLUE}"
+	curl -H "content-type: application/json" -H "X-Api-Key: $APIKEY" -d "{\"end\":\"$CURRENTDATE\"}" -X PATCH https://api.clockify.me/api/v1/workspaces/$WORKSPACEID/user/$USERID/time-entries | json_pp
+
+	echo -e "${CYAN}-----Stopped Task-----"
+fi
+
+#Start existing task
+if [ "$1" = "start" ] && [ "$2" != "" ] && [ "$2" != "new" ] && [ "$2" != "standup" ]
+then
+	echo -e "${CYAN}-----Starting Task-----${NC}"
+	echo -e "${BLUE}"
+	oldTaskArr=$(curl -G -H "content-type: application/json" -H "X-Api-Key: $APIKEY" -d "name=$2" -X GET https://api.clockify.me/api/v1/workspaces/$WORKSPACEID/projects/$PROJECTID/tasks)
+
+	oldTask=$(echo $oldTaskArr | jq .[0])
+	echo $oldTask | json_pp
+	oldTaskId=$(echo $oldTask | jq -r .id)
+	taskName=$(echo $oldTask | jq -r .name)
+
+	curl -H "content-type: application/json" -H "X-Api-Key: $APIKEY" -d "{\"start\":\"$CURRENTDATE\", \"billable\":\"true\", \"description\":\"$taskName\", \"projectId\":\"$PROJECTID\", \"taskId\":\"$oldTaskId\"}" -X POST https://api.clockify.me/api/v1/workspaces/$WORKSPACEID/time-entries | json_pp
+
+	echo -e "${CYAN}-----Started Task-----"
+fi
